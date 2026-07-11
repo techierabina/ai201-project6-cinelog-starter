@@ -98,3 +98,8 @@ Adds a watchlist feature to CineLog, allowing users to save films they want to w
 **Note on running the app:** Use `flask --app app run --debug` rather than `python3 app.py` directly. Running the file directly causes Python to import `app.py` twice under two different module names (`__main__` and `app`), creating two separate `SQLAlchemy` instances — one of which never receives `init_app()`. This surfaces as `RuntimeError: The current Flask app is not registered with this 'SQLAlchemy' instance` on the first database call. The Flask CLI avoids this by importing the module consistently.
 
 All four scenarios above (create, duplicate, nonexistent, view) were manually verified against a live running server and returned the expected status codes and payloads.
+
+
+## Commit History Screenshot
+<img width="1110" height="409" alt="Screenshot 2026-07-11 at 4 45 23 PM" src="https://github.com/user-attachments/assets/a62f0bb2-67d0-4d45-afdf-9ce641551517" />
+
