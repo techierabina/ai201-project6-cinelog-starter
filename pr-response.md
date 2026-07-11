@@ -30,5 +30,14 @@
 **How I resolved it:** Re-added the `WatchlistEntry` class to `models.py`, updating `film_id` from `db.Integer` to `db.String(36)` to match the new UUID pattern used by `Film.id` and `CollectionEntry.film_id`. I also found and fixed two remaining integer assumptions that weren't caught by the import error: a stale docstring in `add_to_watchlist()` still describing `film_id` as `int`, and a test fixture in `test_watchlist.py` using `fake_film_id = 999999` (an integer) instead of a UUID string. The test had been passing anyway because SQLite doesn't strictly enforce the type mismatch, which meant the test was passing for a coincidentally-wrong reason rather than a correct one.
 **How I verified no conflict remains:** Ran `pytest tests/ -v` to confirm all 5 tests pass, then grepped for any remaining integer-style film IDs (`grep -n "film_id" services/watchlist_service.py` and `grep -n "fake_film_id" tests/test_watchlist.py`) to confirm both were updated to UUID strings. Also confirmed `git log --oneline` shows no merge commits — the rebase replayed cleanly as a linear history.
 
+## Additional Fixes Found During Manual Testing
+
+While writing the PR description and manually testing the watchlist endpoints with `curl`, I found and fixed two bugs not covered by the six review comments:
+
+1. **Missing error handling in `routes/watchlist/watchlist.py`:** `add_film()` never caught `FilmNotFoundError` or `AlreadyInWatchlistError`, so both would surface as an unhandled `500 Internal Server Error` instead of a clean, informative response. Added a `try/except` returning `404` for a nonexistent film and `409 Conflict` for a duplicate.
+2. **Missing `watchlist_entries` relationship on `Film`:** `get_watchlist()` calls `entry.film.to_dict()`, but `Film` only declared a `collection_entries` backref (which is what makes `entry.film` work on a `CollectionEntry`) — there was no equivalent relationship wiring up `film` on `WatchlistEntry`. This meant `GET /watchlist/<user_id>` would raise `AttributeError: 'WatchlistEntry' object has no attribute 'film'` on any watchlist with at least one entry. No existing test caught this since the test suite only covers `add_to_watchlist`'s nonexistent-film case, not `get_watchlist()`. Fixed by adding `watchlist_entries = db.relationship("WatchlistEntry", backref="film", lazy=True)` to `Film`, matching the existing pattern for collections.
+
+Both were confirmed fixed via live manual testing (`curl` against a running server) documented in the PR Description below, not just unit tests — this uncovered a real gap in test coverage (no `test_get_watchlist` exists) worth flagging as a follow-up.
+
 ## PR Description
 <!-- Written at the end — feature overview, design decisions, manual testing steps -->
