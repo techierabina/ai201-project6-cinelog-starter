@@ -1,7 +1,16 @@
 # PR Response Doc — CineLog Watchlist Feature
 
 ## AI Usage
-<!-- Fill in at the end — how you used AI tools during this project -->
+
+I used Claude throughout this project for a mix of orientation, hygiene, and devil's-advocate stress-testing — but the design reasoning and final positions on Comments 4 and 5 are my own.
+
+- **Codebase orientation:** Used Claude to help read through `models.py`, `collection_service.py`, and `test_collection.py` before touching the six review comments, confirming the `verb_to_noun` naming pattern and the dedup/existence-check pattern used in `add_to_collection()`, which I then applied to `add_to_watchlist()`.
+- **Git/environment troubleshooting:** Used Claude extensively to debug environment setup issues (a nested clone folder, a broken venv not actually activating, a fork missing `feature/watchlist` requiring an `upstream` remote), and to walk through the interactive rebase (`git rebase -i`) for rewriting commit history into conventional format.
+- **Devil's advocate on Comment 4 (default visibility):** I drafted my own position (public by default) and reasoning first. Claude pointed out two factual issues in my draft: I had incorrectly claimed collections were public by default (there's no `public` field on `CollectionEntry` at all), and I had overstated that CineLog already has social/discovery features when it doesn't. I revised both points myself so the final argument accurately reflects the codebase, while keeping my original position.
+- **Devil's advocate on Comment 5 (sort order):** I independently reached the same conclusion as the maintainer (date-added order) based on what a watchlist is actually for, then had Claude check my reasoning. It confirmed the consistency argument (that `get_collection()` already sorts by `date_added`) was factually accurate this time, and noted the tension in one of my claims about watchlist size versus alphabetical usefulness — I didn't need to revise the argument, since I'd already acknowledged that tradeoff.
+- **Bug discovery during manual testing:** While writing the PR description, Claude prompted me to actually test the endpoints live with `curl` rather than just describing expected behavior. This surfaced two real bugs not covered by the six review comments: missing error handling in the watchlist route (returning `500` instead of `404`/`409`), and a missing `watchlist_entries` relationship on `Film` that caused `GET /watchlist/<user_id>` to fail with an `AttributeError`. Both are documented and fixed above.
+
+I did not ask AI to write the Comment 4 or Comment 5 responses themselves — I wrote my own position and reasoning first in both cases, and used AI only to critique what I'd already written against the actual codebase.
 
 ## Comment 1 — Rename
 **What I did:** Renamed `save_to_watchlist()` to `add_to_watchlist()` in `services/watchlist_service.py`, matching the `verb_to_noun` convention used by `add_to_collection()`. Updated the one call site in `routes/watchlist/watchlist.py` (both the import and the function call).
