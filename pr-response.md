@@ -40,4 +40,52 @@ While writing the PR description and manually testing the watchlist endpoints wi
 Both were confirmed fixed via live manual testing (`curl` against a running server) documented in the PR Description below, not just unit tests — this uncovered a real gap in test coverage (no `test_get_watchlist` exists) worth flagging as a follow-up.
 
 ## PR Description
-<!-- Written at the end — feature overview, design decisions, manual testing steps -->
+
+### What this feature does
+
+Adds a watchlist feature to CineLog, allowing users to save films they want to watch (distinct from the existing collection feature, which tracks films already watched). Includes a `WatchlistEntry` model, `add_to_watchlist()` / `get_watchlist()` service functions with deduplication and existence validation, and REST endpoints (`GET /watchlist/<user_id>`, `POST /watchlist/<user_id>/add`).
+
+### Design decisions
+
+**Default visibility (`public=True`):** Watchlists default to public. CineLog doesn't currently have social or discovery features, but a public default keeps that door open for the future without requiring a breaking schema migration later. See Comment 4 in this document for full reasoning and the acknowledged tradeoff.
+
+**Sort order (date-added, not alphabetical):** `get_watchlist()` sorts by `date_added` descending (newest first), matching `get_collection()`'s existing pattern. A watchlist functions as an active queue of recent discoveries rather than a catalog to search alphabetically. See Comment 5 for full reasoning and the acknowledged tradeoff.
+
+### Manual testing steps
+
+1. Start the app using the Flask CLI (not `python3 app.py` directly — see note below):
+```bash
+   flask --app app run --debug
+```
+2. Create a test user and film directly via the app context (no user/film creation endpoints exist yet):
+```bash
+   python3 - << 'PYEOF'
+   from app import create_app, db
+   from models import User, Film
+   app = create_app()
+   with app.app_context():
+       user = User(username="testuser", email="test@example.com")
+       film = Film(title="Paddington 2", year=2017, genre="Comedy")
+       db.session.add_all([user, film])
+       db.session.commit()
+       print("USER_ID:", user.id)
+       print("FILM_ID:", film.id)
+   PYEOF
+```
+3. Add the film to the watchlist — expect `201 CREATED` with the new entry as JSON:
+```bash
+   curl -i -X POST http://127.0.0.1:5000/watchlist/<user_id>/add \
+     -H "Content-Type: application/json" \
+     -d '{"film_id": "<film_id>"}'
+```
+4. Repeat the same request — expect `409 CONFLICT` with `{"error": "Film '<film_id>' is already on this user's watchlist"}`.
+5. Retry with a nonexistent film ID (e.g. `00000000-0000-0000-0000-000000000000`) — expect `404 NOT FOUND` with a matching error message.
+6. View the watchlist — expect `200 OK` with the film's full data plus `date_added` and `public`:
+```bash
+   curl -i http://127.0.0.1:5000/watchlist/<user_id>
+```
+7. Run the automated test suite: `pytest tests/ -v` — all 5 tests should pass.
+
+**Note on running the app:** Use `flask --app app run --debug` rather than `python3 app.py` directly. Running the file directly causes Python to import `app.py` twice under two different module names (`__main__` and `app`), creating two separate `SQLAlchemy` instances — one of which never receives `init_app()`. This surfaces as `RuntimeError: The current Flask app is not registered with this 'SQLAlchemy' instance` on the first database call. The Flask CLI avoids this by importing the module consistently.
+
+All four scenarios above (create, duplicate, nonexistent, view) were manually verified against a live running server and returned the expected status codes and payloads.
